@@ -53,7 +53,9 @@ def registerUser(request):
             user.save()
 
             # Send Verification email
-            send_verification_email(request, user)
+            mail_subject = 'Activate your FoodDelivery account.'
+            email_template = 'accounts/emails/account_verification_email.html'
+            send_verification_email(request, user, mail_subject, email_template)
             messages.success(request, 'User is Created!')
             return redirect('registerUser')
         else:
@@ -87,7 +89,9 @@ def registerVendor(request):
             vendor.save()
 
             # Send verification email
-            send_verification_email(request, user)
+            mail_subject = 'Activate your FoodDelivery Vendor account.'
+            email_template = 'accounts/emails/account_verification_email.html'
+            send_verification_email(request, user, mail_subject, email_template)
             messages.success(request, 'Your Vendor account has been registered! Waiting for Approval!')
             return redirect('registerVendor')
         else:
@@ -163,3 +167,29 @@ def custDashboard(request):
 @user_passes_test(check_role_vendor)
 def vendorDashboard(request):
     return render(request, 'accounts/vendorDashboard.html')
+
+
+def forgot_password(request):
+    if request.method == 'POST':
+        email = request.POST['email']
+        if User.objects.filter(email=email).exists():
+            user = User.objects.get(email__exact=email)
+
+            # Send reset password email
+            mail_subject = 'Reset Your Password'
+            email_template = 'accounts/emails/reset_password_email.html'
+            send_verification_email(request, user, mail_subject, email_template)
+            messages.success(request, 'Password reset link sent to the provided email!')
+            return redirect('login')
+        else:
+            messages.error(request, 'Account does not exist!')
+            return redirect('forgot_password')
+
+    return render(request, 'accounts/forgot_password.html')
+
+def reset_password_validate(request, uidb64, token):
+    # Validate user by decoding the token
+    return
+
+def reset_password(request):
+    return render(request, 'accounts/reset_password.html')
