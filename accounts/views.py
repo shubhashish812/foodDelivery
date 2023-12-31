@@ -1,11 +1,13 @@
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import render, redirect
+from django.utils.http import urlsafe_base64_decode
 
 from vendor.forms import VendorForm
 from .forms import UserForm
 from .models import User, UserProfile
 from django.contrib import messages, auth
-from .utils import detectUser
+from .utils import detectUser, send_verification_email
 from django.contrib.auth.decorators import login_required, user_passes_test
 
 # Create your views here.
@@ -29,9 +31,9 @@ def check_role_customer(user):
 def registerUser(request):
     if request.user.is_authenticated:
         messages.warning(request, 'You are already logged in! Log out to register a new account!')
-        return redirect('dashboard')
+        return redirect('custDashboard')
     elif request.method == 'POST':
-        #print(request.POST)
+        print(request.POST)
         form = UserForm(request.POST)
         if form.is_valid():
             # user = form.save(commit=False)
@@ -49,11 +51,14 @@ def registerUser(request):
             user = User.objects.create_user(first_name=first_name,last_name=last_name,username=username,email=email,password=password)
             user.role = User.CUSTOMER_CHOICE
             user.save()
+
+            # Send Verification email
+            send_verification_email(request, user)
             messages.success(request, 'User is Created!')
             return redirect('registerUser')
         else:
             print('Invalid form')
-            #print(form.errors)
+            print(form.errors)
     else:
         form = UserForm()
     context = {'form': form}
@@ -62,7 +67,7 @@ def registerUser(request):
 def registerVendor(request):
     if request.user.is_authenticated:
         messages.warning(request, 'You are already logged in! Log out to register a new account!')
-        return redirect('dashboard')
+        return redirect('vendorDashboard')
     elif request.method == 'POST':
         form = UserForm(request.POST)
         v_form = VendorForm(request.POST, request.FILES)
@@ -80,17 +85,41 @@ def registerVendor(request):
             user_profile = UserProfile.objects.get(user=user)
             vendor.user_profile = user_profile
             vendor.save()
+
+            # Send verification email
+            send_verification_email(request, user)
             messages.success(request, 'Your Vendor account has been registered! Waiting for Approval!')
             return redirect('registerVendor')
+        else:
+            print('Invalid form')
+            print(form.errors)
+            print(v_form.errors)
 
     else:
         form = UserForm()
         v_form = VendorForm()
 
-    context = {
-        'form': form,
-        'v_form': v_form}
+    context = {'form': form, 'v_form': v_form}
     return render(request, 'accounts/registerVendor.html', context)
+
+
+def activate(request, uidb64, token):
+    #Activate the user
+    try:
+        uid = urlsafe_base64_decode(uidb64)
+        user = User._default_manager.get(pk=uid)
+    except(TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    if user is not None and default_token_generator.check_token(user, token):
+        user.is_active = True
+        user.save()
+        messages.success(request, 'Your account has been activated!')
+        return redirect('myAccount')
+    else:
+        messages.error(request, 'Invalid activation Link!')
+        return redirect('myAccount')
+
 
 
 def login(request):
